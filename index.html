@@ -350,22 +350,26 @@
                     const safeHtml = DOMPurify.sanitize(rawHtml);
                     bubble.innerHTML = safeHtml;
                     
-                    bubble.querySelectorAll('pre code').forEach(block => {
-                        hljs.highlightElement(block);
-                        const wrapper = document.createElement('div'); 
-                        wrapper.className = 'code-wrapper';
-                        const header = document.createElement('div'); 
-                        header.className = 'code-header';
-                        header.innerHTML = `<span>Code</span><button class="copy-code-btn" onclick="app.copy(this)">${i18n.t('copy')}</button>`;
-                        block.parentElement.replaceWith(wrapper);
-                        wrapper.appendChild(header);
-                        wrapper.appendChild(block.parentElement);
-                    });
+                    // Process code blocks
+                    setTimeout(() => {
+                        bubble.querySelectorAll('pre code').forEach(block => {
+                            hljs.highlightElement(block);
+                            const wrapper = document.createElement('div'); 
+                            wrapper.className = 'code-wrapper';
+                            const header = document.createElement('div'); 
+                            header.className = 'code-header';
+                            header.innerHTML = `<span>Code</span><button class="copy-code-btn" onclick="copyCode(this)">${i18n.t('copy')}</button>`;
+                            const pre = block.parentElement;
+                            pre.parentNode.insertBefore(wrapper, pre);
+                            wrapper.appendChild(header);
+                            wrapper.appendChild(pre);
+                        });
+                    }, 0);
                     
                     const actionsDiv = document.createElement('div');
                     actionsDiv.className = 'msg-actions';
                     actionsDiv.innerHTML = `
-                        <button class="msg-action-btn" onclick="app.copyMessage(this)"><i class="fas fa-copy"></i> ${i18n.t('copyMessage')}</button>
+                        <button class="msg-action-btn" onclick="copyMessage(this)"><i class="fas fa-copy"></i> ${i18n.t('copyMessage')}</button>
                     `;
                     bubble.appendChild(actionsDiv);
                 }
@@ -382,7 +386,9 @@
             }
 
             function scrollToBottom() {
-                dom.box.scrollTop = dom.box.scrollHeight;
+                setTimeout(() => {
+                    dom.box.scrollTop = dom.box.scrollHeight;
+                }, 100);
             }
 
             function toggleVoice() {
@@ -395,7 +401,12 @@
                 rec.lang = i18n.currentLang === 'ar' ? 'ar-SA' : 'en-US';
                 rec.onstart = () => { recognizing = true; dom.mic.classList.add('mic-active'); };
                 rec.onend = () => { recognizing = false; dom.mic.classList.remove('mic-active'); };
-                rec.onresult = e => { dom.input.value += ' ' + e.results[0][0].transcript; dom.input.dispatchEvent(new Event('input')); };
+                rec.onresult = e => { 
+                    if(e.results[0] && e.results[0][0]) {
+                        dom.input.value += ' ' + e.results[0][0].transcript; 
+                        dom.input.dispatchEvent(new Event('input'));
+                    }
+                };
                 rec.start();
             }
 
@@ -404,40 +415,67 @@
                     LocalDB.clear();
                     conversationMessages = [];
                     dom.box.innerHTML = '';
-                    document.getElementById('welcome-screen').style.display = 'block';
+                    dom.box.innerHTML = `<div id="welcome-screen" style="text-align:center; padding-top:60px; opacity:0.6;">
+                        <div style="width:80px; height:80px; background:var(--accent-primary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; box-shadow:0 0 30px var(--accent-glow);">
+                            <i class="fas fa-biohazard" style="font-size:2.5rem; color:#fff;"></i>
+                        </div>
+                        <h3 style="font-family:'Orbitron'; margin-bottom:10px;">WormGPT Unlimited</h3>
+                        <p style="font-size:0.9rem;">Dev: <span style="color:var(--accent-primary)">غيلص</span></p>
+                        <div id="limit-badge" style="margin-top:20px; font-size:0.8rem; background:#111; display:inline-block; padding:5px 15px; border-radius:20px; border:1px solid #333;">
+                            <span style="color:gold">Unlimited Access ∞</span>
+                        </div>
+                    </div>`;
                 }
             }
 
             function exportChat() {
                 html2canvas(dom.box).then(cvs => {
                     const a = document.createElement('a'); 
-                    a.download = 'WormGPT-History.png'; 
+                    a.download = 'WormGPT-History-' + Date.now() + '.png'; 
                     a.href = cvs.toDataURL(); 
                     a.click();
                 });
             }
 
-            window.app = { 
-                copy: (btn) => {
-                    const txt = btn.parentElement.nextElementSibling.innerText;
-                    navigator.clipboard.writeText(txt);
-                    const old = btn.innerText; btn.innerText = "Copied!"; setTimeout(()=>btn.innerText=old, 1500);
-                },
-                copyMessage: (btn) => {
-                    const bubble = btn.closest('.msg-bubble');
-                    const clone = bubble.cloneNode(true);
-                    clone.querySelector('.msg-actions')?.remove();
-                    navigator.clipboard.writeText(clone.innerText.trim());
-                    btn.innerHTML = '<i class="fas fa-check"></i>';
-                    setTimeout(()=> btn.innerHTML = `<i class="fas fa-copy"></i> ${i18n.t('copyMessage')}`, 1500);
+            return { 
+                init, 
+                send, 
+                toggleVoice, 
+                clearChat, 
+                exportChat, 
+                toggleMenu: () => { 
+                    document.getElementById('sidebar').classList.toggle('active'); 
+                    document.querySelector('.overlay').classList.toggle('active'); 
                 }
             };
-
-            return { init, send, toggleVoice, clearChat, exportChat, toggleMenu: () => { 
-                document.getElementById('sidebar').classList.toggle('active'); 
-                document.querySelector('.overlay').classList.toggle('active'); 
-            }};
         })();
+
+        // Global functions for event handlers
+        function copyCode(btn) {
+            const codeBlock = btn.closest('.code-wrapper').querySelector('code');
+            const textToCopy = codeBlock.innerText || codeBlock.textContent;
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalText = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btn.innerHTML = originalText;
+                }, 2000);
+            });
+        }
+
+        function copyMessage(btn) {
+            const bubble = btn.closest('.msg-bubble');
+            const clone = bubble.cloneNode(true);
+            clone.querySelector('.msg-actions')?.remove();
+            const textToCopy = clone.innerText.trim();
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const originalHTML = btn.innerHTML;
+                btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    btn.innerHTML = originalHTML;
+                }, 2000);
+            });
+        }
 
         // Start App
         document.addEventListener('DOMContentLoaded', () => {
@@ -445,4 +483,4 @@
         });
     </script>
 </body>
-</html>
+    </html>
