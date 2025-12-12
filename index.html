@@ -124,6 +124,13 @@
             text-align: center; font-size: 0.85rem; color: #888;
         }
         .dev-badge a { color: var(--accent-primary); text-decoration: none; font-weight: bold; }
+        
+        .new-session-btn {
+            width: 100%; padding: 12px; background: linear-gradient(145deg, #80001a, #4d000f);
+            border: 1px solid #660011; color: white; border-radius: 10px; margin-top: 15px;
+            cursor: pointer; font-family: 'Cairo'; font-weight: bold; transition: transform 0.2s;
+        }
+        .new-session-btn:hover { transform: scale(1.02); }
     </style>
 </head>
 <body>
@@ -168,7 +175,7 @@
             <div style="text-align:center; font-size:0.7rem; color:#555; margin-top:8px;">
                 <span>Dev: <a href="https://t.me/S05051422" target="_blank" style="color:var(--accent-primary);text-decoration:none;">@S05051422</a></span>
                 <span style="margin:0 5px;">|</span>
-                <span style="color:#00ff88;">Local Storage Active ✓</span>
+                <span style="color:#00ff88;">Memory System Active ✓</span>
             </div>
         </div>
     </div>
@@ -186,9 +193,22 @@
                 <div style="color:#fff; font-size:1.1rem;"><i class="fas fa-infinity" style="color:gold"></i> <span id="side-user">غير محدود</span></div>
             </div>
             
-            <div style="padding:15px; background:#111; border-radius:10px; border:1px solid #222; margin-bottom:20px;">
+            <div style="margin-bottom:20px;">
+                <label style="font-size:0.7rem; color:#555; display:block; margin-bottom:5px;">الجلسة الحالية</label>
+                <div style="padding:12px; background:#111; border-radius:10px; border:1px solid #222;">
+                    <div style="color:#00ff88; font-size:0.9rem; margin-bottom:5px;" id="session-status">● الذاكرة مفعلة</div>
+                    <div style="color:#666; font-size:0.7rem; word-break: break-all;" id="session-id">جاري التحميل...</div>
+                </div>
+            </div>
+            
+            <button onclick="app.startNewSession()" class="new-session-btn">
+                <i class="fas fa-plus-circle"></i> بدء جلسة جديدة
+            </button>
+
+            <div style="padding:15px; background:#111; border-radius:10px; border:1px solid #222; margin-bottom:20px; margin-top:20px;">
                 <p style="font-size:0.8rem; color:#666; margin-bottom:5px;">حفظ البيانات</p>
                 <p style="color:#0f0; font-size:0.9rem;">● تخزين محلي (Local)</p>
+                <p style="color:#0ff; font-size:0.8rem; margin-top:5px;">● نظام الذاكرة مفعل</p>
             </div>
 
             <div class="dev-badge">
@@ -203,10 +223,40 @@
     <script>
         // ================= CONFIGURATION =================
         const CONFIG = {
-            API_URL: "https://mtimpbkuwznteintrvqk.supabase.co/functions/v1/api-chat",
-            API_KEY: "wgpt_t544hwol5lizsaue3l83b",
+            API_URL: "https://udghbdlcrzvkfsyjqkch.supabase.co/functions/v1/chat",
+            API_KEY: "your-api-key-here", // ضع مفتاح API الخاص بك هنا
             DEV_CONTACT: "@S05051422"
         };
+
+        // ================= SESSION MANAGER =================
+        const SessionManager = (function() {
+            let sessionId = localStorage.getItem('wgpt_session_id');
+            
+            if (!sessionId) {
+                sessionId = generateUUID();
+                localStorage.setItem('wgpt_session_id', sessionId);
+            }
+            
+            function generateUUID() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    const r = Math.random() * 16 | 0;
+                    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            }
+            
+            function getSessionId() {
+                return sessionId;
+            }
+            
+            function newSession() {
+                sessionId = generateUUID();
+                localStorage.setItem('wgpt_session_id', sessionId);
+                return sessionId;
+            }
+            
+            return { getSessionId, newSession };
+        })();
 
         // ================= TRANSLATIONS =================
         const TRANSLATIONS = {
@@ -217,7 +267,11 @@
                 listen: "استماع",
                 noTextToRead: "لا يوجد نص للقراءة",
                 audioError: "خطأ في تشغيل الصوت",
-                clearChatConfirm: "هل أنت متأكد من حذف السجل المحلي؟"
+                clearChatConfirm: "هل أنت متأكد من حذف السجل المحلي؟",
+                newSession: "جلسة جديدة",
+                memoryActive: "الذاكرة مفعلة",
+                startNewSession: "بدء جلسة جديدة",
+                sessionActive: "جلسة نشطة"
             },
             en: {
                 typeMessage: "Type your message...",
@@ -226,7 +280,11 @@
                 listen: "Listen",
                 noTextToRead: "No text to read",
                 audioError: "Error playing audio",
-                clearChatConfirm: "Clear local history?"
+                clearChatConfirm: "Clear local history?",
+                newSession: "New Session",
+                memoryActive: "Memory Active",
+                startNewSession: "Start New Session",
+                sessionActive: "Active Session"
             }
         };
 
@@ -239,6 +297,8 @@
                 htmlRoot.setAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr');
                 const t = TRANSLATIONS[lang];
                 document.getElementById('msg-input').placeholder = t.typeMessage;
+                document.querySelector('.new-session-btn').innerHTML = `<i class="fas fa-plus-circle"></i> ${t.startNewSession}`;
+                document.getElementById('session-status').textContent = `● ${t.memoryActive}`;
             }
             function t(key) { return TRANSLATIONS[currentLang][key] || key; }
             return { changeLang, t, get currentLang() { return currentLang; } };
@@ -282,6 +342,9 @@
                     dom.send.disabled = !this.value.trim();
                 });
                 
+                // تحديث واجهة الجلسة
+                updateSessionInfo();
+                
                 // Load history immediately
                 conversationMessages = LocalDB.load();
                 if(conversationMessages.length > 0) {
@@ -289,6 +352,11 @@
                     conversationMessages.forEach(msg => addMsg(msg.role, msg.content, false));
                     scrollToBottom();
                 }
+                
+                // تحميل اللغة المختارة
+                const savedLang = localStorage.getItem('wgpt_lang') || 'ar';
+                document.getElementById('language-selector').value = savedLang;
+                i18n.changeLang(savedLang);
             }
 
             async function send() {
@@ -309,30 +377,84 @@
                 LocalDB.save(conversationMessages);
 
                 try {
-                    // New API Call Method (GET request)
-                    const sessionId = "auto";
-                    const url = `${CONFIG.API_URL}?message=${encodeURIComponent(txt)}&key=${CONFIG.API_KEY}&format=json&session_id=${sessionId}`;
+                    // WormGPT API V2 - مع دعم الذاكرة والجلسات
+                    const response = await fetch(CONFIG.API_URL, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            api_key: CONFIG.API_KEY,
+                            message: txt,
+                            session_id: SessionManager.getSessionId()
+                        })
+                    });
 
-                    const res = await fetch(url);
                     document.getElementById(loadId).remove();
                     
-                    if(!res.ok) throw new Error("Server Error");
-                    const data = await res.json();
+                    if(!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`HTTP ${response.status}: ${errorText}`);
+                    }
                     
-                    if(data.success) {
+                    const data = await response.json();
+                    
+                    if(data.response) {
                         addMsg('bot', data.response);
                         conversationMessages.push({ role: 'bot', content: data.response });
                         LocalDB.save(conversationMessages);
+                    } else if(data.error) {
+                        addMsg('bot', `⚠️ خطأ: ${data.error}`);
                     } else {
-                        addMsg('bot', `Error: ${data.error || "Unknown error"}`);
+                        addMsg('bot', `⚠️ استجابة غير صحيحة من الخادم`);
                     }
 
                 } catch(e) {
                     document.getElementById(loadId)?.remove();
-                    addMsg('bot', `⚠️ خطأ في الاتصال: ${e.message}`);
+                    console.error("API Error:", e);
+                    addMsg('bot', `⚠️ خطأ في الاتصال: ${e.message}<br>
+                    <small>تأكد من:<br>
+                    1. صحة API Key<br>
+                    2. اتصال الإنترنت<br>
+                    3. صلاحية الخادم</small>`);
                 } finally {
                     dom.send.disabled = false;
                 }
+            }
+
+            function startNewSession() {
+                if(confirm("هل تريد بدء جلسة جديدة؟ سيتم مسح تاريخ المحادثة الحالية ولكن تبقى الذاكرة السابقة في الخادم.")) {
+                    const newSessionId = SessionManager.newSession();
+                    conversationMessages = [];
+                    LocalDB.clear();
+                    dom.box.innerHTML = '';
+                    dom.box.innerHTML = `<div id="welcome-screen" style="text-align:center; padding-top:60px; opacity:0.6;">
+                        <div style="width:80px; height:80px; background:var(--accent-primary); border-radius:50%; display:flex; align-items:center; justify-content:center; margin:0 auto 20px; box-shadow:0 0 30px var(--accent-glow);">
+                            <i class="fas fa-biohazard" style="font-size:2.5rem; color:#fff;"></i>
+                        </div>
+                        <h3 style="font-family:'Orbitron'; margin-bottom:10px;">WormGPT Unlimited</h3>
+                        <p style="font-size:0.9rem;">Dev: <span style="color:var(--accent-primary)">غيلص</span></p>
+                        <div id="limit-badge" style="margin-top:20px; font-size:0.8rem; background:#111; display:inline-block; padding:5px 15px; border-radius:20px; border:1px solid #333;">
+                            <span style="color:gold">New Session Started ✓</span>
+                        </div>
+                    </div>`;
+                    
+                    updateSessionInfo();
+                    app.toggleMenu();
+                    
+                    // عرض رسالة تأكيد
+                    setTimeout(() => {
+                        addMsg('bot', `✅ تم بدء جلسة جديدة بنجاح!<br>
+                        <small>رقم الجلسة: ${newSessionId.substring(0, 8)}...<br>
+                        نظام الذاكرة مفعل للجلسات القادمة</small>`);
+                    }, 500);
+                }
+            }
+
+            function updateSessionInfo() {
+                const sessionId = SessionManager.getSessionId();
+                document.getElementById('session-id').textContent = `ID: ${sessionId}`;
+                document.getElementById('session-status').textContent = `● ${i18n.t('memoryActive')}`;
             }
 
             function addMsg(role, text, animate = true) {
@@ -370,6 +492,7 @@
                     actionsDiv.className = 'msg-actions';
                     actionsDiv.innerHTML = `
                         <button class="msg-action-btn" onclick="copyMessage(this)"><i class="fas fa-copy"></i> ${i18n.t('copyMessage')}</button>
+                        <button class="msg-action-btn" onclick="readMessage(this)"><i class="fas fa-volume-up"></i> ${i18n.t('listen')}</button>
                     `;
                     bubble.appendChild(actionsDiv);
                 }
@@ -380,7 +503,7 @@
 
             function addLoader() {
                 const id = 'l-' + Date.now();
-                dom.box.insertAdjacentHTML('beforeend', `<div id="${id}" class="message msg-bot"><div class="msg-bubble"><i class="fas fa-circle-notch fa-spin"></i></div></div>`);
+                dom.box.insertAdjacentHTML('beforeend', `<div id="${id}" class="message msg-bot"><div class="msg-bubble"><i class="fas fa-circle-notch fa-spin"></i> جاري المعالجة...</div></div>`);
                 scrollToBottom();
                 return id;
             }
@@ -393,20 +516,46 @@
 
             function toggleVoice() {
                 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-                if(!SR) return alert("المتصفح لا يدعم الصوت");
+                if(!SR) return alert("المتصفح لا يدعم التعرف الصوتي");
                 
-                if(recognizing) return;
+                if(recognizing) {
+                    recognizing = false;
+                    dom.mic.classList.remove('mic-active');
+                    return;
+                }
                 
                 const rec = new SR();
                 rec.lang = i18n.currentLang === 'ar' ? 'ar-SA' : 'en-US';
-                rec.onstart = () => { recognizing = true; dom.mic.classList.add('mic-active'); };
-                rec.onend = () => { recognizing = false; dom.mic.classList.remove('mic-active'); };
-                rec.onresult = e => { 
-                    if(e.results[0] && e.results[0][0]) {
-                        dom.input.value += ' ' + e.results[0][0].transcript; 
+                rec.continuous = false;
+                rec.interimResults = false;
+                
+                rec.onstart = () => { 
+                    recognizing = true; 
+                    dom.mic.classList.add('mic-active'); 
+                    dom.input.placeholder = "🔊 أتكلم الآن...";
+                };
+                
+                rec.onend = () => { 
+                    recognizing = false; 
+                    dom.mic.classList.remove('mic-active');
+                    dom.input.placeholder = i18n.t('typeMessage');
+                };
+                
+                rec.onerror = (event) => {
+                    console.error("Speech recognition error", event.error);
+                    recognizing = false;
+                    dom.mic.classList.remove('mic-active');
+                    alert("حدث خطأ في التعرف الصوتي: " + event.error);
+                };
+                
+                rec.onresult = (event) => { 
+                    if(event.results[0] && event.results[0][0]) {
+                        const transcript = event.results[0][0].transcript;
+                        dom.input.value = transcript; 
                         dom.input.dispatchEvent(new Event('input'));
                     }
                 };
+                
                 rec.start();
             }
 
@@ -422,7 +571,7 @@
                         <h3 style="font-family:'Orbitron'; margin-bottom:10px;">WormGPT Unlimited</h3>
                         <p style="font-size:0.9rem;">Dev: <span style="color:var(--accent-primary)">غيلص</span></p>
                         <div id="limit-badge" style="margin-top:20px; font-size:0.8rem; background:#111; display:inline-block; padding:5px 15px; border-radius:20px; border:1px solid #333;">
-                            <span style="color:gold">Unlimited Access ∞</span>
+                            <span style="color:gold">Chat Cleared ✓</span>
                         </div>
                     </div>`;
                 }
@@ -442,10 +591,12 @@
                 send, 
                 toggleVoice, 
                 clearChat, 
-                exportChat, 
+                exportChat,
+                startNewSession,
                 toggleMenu: () => { 
                     document.getElementById('sidebar').classList.toggle('active'); 
                     document.querySelector('.overlay').classList.toggle('active'); 
+                    updateSessionInfo();
                 }
             };
         })();
@@ -477,9 +628,61 @@
             });
         }
 
+        function readMessage(btn) {
+            const bubble = btn.closest('.msg-bubble');
+            const clone = bubble.cloneNode(true);
+            clone.querySelector('.msg-actions')?.remove();
+            const textToRead = clone.innerText.trim();
+            
+            if (!textToRead) {
+                alert(i18n.t('noTextToRead'));
+                return;
+            }
+            
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(textToRead);
+                utterance.lang = i18n.currentLang === 'ar' ? 'ar-SA' : 'en-US';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.0;
+                
+                btn.innerHTML = '<i class="fas fa-stop"></i> إيقاف';
+                btn.onclick = () => {
+                    speechSynthesis.cancel();
+                    btn.innerHTML = '<i class="fas fa-volume-up"></i> ' + i18n.t('listen');
+                    btn.onclick = () => readMessage(btn);
+                };
+                
+                utterance.onend = () => {
+                    btn.innerHTML = '<i class="fas fa-volume-up"></i> ' + i18n.t('listen');
+                    btn.onclick = () => readMessage(btn);
+                };
+                
+                speechSynthesis.speak(utterance);
+            } else {
+                alert(i18n.t('audioError'));
+            }
+        }
+
+        // تحديث اختيار اللغة لحفظ التفضيل
+        document.getElementById('language-selector').addEventListener('change', function(e) {
+            i18n.changeLang(e.target.value);
+            localStorage.setItem('wgpt_lang', e.target.value);
+        });
+
         // Start App
         document.addEventListener('DOMContentLoaded', () => {
             app.init();
+            
+            // عرض رسالة ترحيب
+            setTimeout(() => {
+                const welcomeMsg = i18n.currentLang === 'ar' 
+                    ? "مرحبًا! أنا WormGPT Unlimited. كيف يمكنني مساعدتك اليوم؟"
+                    : "Hello! I'm WormGPT Unlimited. How can I assist you today?";
+                    
+                if (conversationMessages.length === 0) {
+                    app.addMsg('bot', welcomeMsg);
+                }
+            }, 1000);
         });
     </script>
 </body>
